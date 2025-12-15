@@ -17,57 +17,30 @@ const (
 	StateForm
 )
 
-type FormData struct {
-	Title   string
-	Desc    string
-	Confirm bool
-}
-
 type MainModel struct {
 	State    int
 	Choices  []model.Task
 	Cursor   int
 	Selected map[int]struct{}
 
-	form *huh.Form
-
+	form     *huh.Form
 	formData *FormData
+
+	indexToEdit int
 }
 
 func InitialModel() MainModel {
 	return MainModel{
-		State:    StateList,
-		Choices:  []model.Task{}, // examples
-		Selected: make(map[int]struct{}),
-
-		formData: &FormData{},
+		State:       StateList,
+		Choices:     []model.Task{},
+		Selected:    make(map[int]struct{}),
+		formData:    &FormData{},
+		indexToEdit: -1,
 	}
 }
 
 func (m MainModel) Init() tea.Cmd {
 	return nil
-}
-
-func NewTaskForm(data *FormData) *huh.Form {
-	return huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Title of the task").
-				CharLimit(40).
-				Value(&data.Title),
-
-			huh.NewText().
-				Title("Description of the task").
-				CharLimit(200).
-				Value(&data.Desc),
-
-			huh.NewConfirm().
-				Title("Wanna create this task?").
-				Affirmative("Yes!").
-				Negative("No.").
-				Value(&data.Confirm),
-		),
-	).WithTheme(huh.ThemeBase())
 }
 
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -79,24 +52,30 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.form.State == huh.StateCompleted {
 				if m.formData.Confirm && m.formData.Title != "" {
-					newTask := model.Task{
-						ID:          len(m.Choices) + 1,
-						Title:       m.formData.Title,
-						Description: m.formData.Desc,
-						CreatedAt:   time.Now(),
-						Status:      model.Todo,
+					if m.indexToEdit == -1 {
+						newTask := model.Task{
+							ID:          len(m.Choices) + 1,
+							Title:       m.formData.Title,
+							Description: m.formData.Desc,
+							CreatedAt:   time.Now(),
+							Status:      model.Todo,
+						}
+
+						m.Choices = append(m.Choices, newTask)
+					} else {
+						m.Choices[m.indexToEdit].Title = m.formData.Title
+						m.Choices[m.indexToEdit].Description = m.formData.Desc
+						m.Choices[m.indexToEdit].UpdatedAt = time.Now()
 					}
 
-					m.Choices = append(m.Choices, newTask)
 					storage.SaveTask("data.json", m.Choices)
-				} else {
-					fmt.Println("DEBUG ERROR: Not saving because Title is empty or Confirm is No")
 				}
 
 				m.State = StateList
 				m.formData.Title = ""
 				m.formData.Desc = ""
 				m.formData.Confirm = false
+				m.indexToEdit = -1
 			}
 		}
 		return m, cmd
@@ -121,17 +100,56 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter", " ":
-			_, ok := m.Selected[m.Cursor]
-			if ok {
-				delete(m.Selected, m.Cursor)
-			} else {
-				m.Selected[m.Cursor] = struct{}{}
+			if len(m.Choices) > 0 {
+				currentStatus := m.Choices[m.Cursor].Status
+
+				if currentStatus == model.Done {
+					m.Choices[m.Cursor].Status = model.Todo
+				} else {
+					m.Choices[m.Cursor].Status++
+				}
+
+				storage.SaveTask("data.json", m.Choices)
 			}
 
 		case "n":
+			m.indexToEdit = -1
+
+			m.formData.Title = ""
+			m.formData.Desc = ""
+			m.formData.Confirm = false
+
 			m.State = StateForm
 			m.form = NewTaskForm(m.formData)
 			return m, m.form.Init()
+
+		case "d":
+			if len(m.Choices) > 0 {
+				m.Choices = append(m.Choices[:m.Cursor], m.Choices[m.Cursor+1:]...)
+
+				storage.SaveTask("data.json", m.Choices)
+
+				if m.Cursor >= len(m.Choices) && m.Cursor > 0 {
+					m.Cursor--
+				}
+
+				m.Selected = make(map[int]struct{})
+			}
+
+		case "e":
+			if len(m.Choices) > 0 {
+				m.indexToEdit = m.Cursor
+
+				taskToEdit := m.Choices[m.Cursor]
+
+				m.formData.Title = taskToEdit.Title
+				m.formData.Desc = taskToEdit.Description
+				m.formData.Confirm = false
+
+				m.State = StateForm
+				m.form = NewTaskForm(m.formData)
+				return m, m.form.Init()
+			}
 		}
 	}
 
@@ -152,16 +170,23 @@ func (m MainModel) View() string {
 			cursor = ">"
 		}
 
-		checked := " "
-		if _, ok := m.Selected[i]; ok {
-			checked = "x"
+		icon := " "
+		switch choice.Status {
+		case model.Todo:
+			icon = "To Do"
+
+		case model.Inprogress:
+			icon = "In Progress"
+
+		case model.Done:
+			icon = "Done"
 		}
 
-		s += fmt.Sprintf("%s [%s] %s - %s\n", cursor, checked, choice.Title, choice.Description)
+		s += fmt.Sprintf("%s [%s] %s - %s\n", cursor, icon, choice.Title, choice.Description)
 	}
 
-	s += "\n---------------------------"
-	s += "\n[ N ] New Task  |  [ E ] Edit Task  |  [ Q ] Quit\n"
+	s += "\n-----------------------------------------------------------------------"
+	s += "\n[ N ] New Task  |  [ E ] Edit Task  |  [ D ] Delete Task  |  [ Q ] Quit\n"
 
 	return s
 }

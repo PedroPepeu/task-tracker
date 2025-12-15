@@ -14,8 +14,6 @@ const (
 	Done
 )
 
-const fileName = "data.json"
-
 type Task struct {
 	ID          int        `json:"id"`
 	Title       string     `json:"title"`

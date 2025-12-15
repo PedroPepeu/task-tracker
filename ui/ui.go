@@ -3,6 +3,7 @@ package ui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -22,6 +23,9 @@ type MainModel struct {
 	Selected map[int]struct{}
 
 	form *huh.Form
+
+	formTitle string
+	formDesc  string
 }
 
 func InitialModel() MainModel {
@@ -36,33 +40,57 @@ func (m MainModel) Init() tea.Cmd {
 	return nil
 }
 
-func NewTaskForm() *huh.NewForm {
-	var title string
-	var desc string
+func NewTaskForm(title *string, desc *string) *huh.Form {
 	var confirm bool
 
-	return huh.newForm(
+	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewText().
 				Title("Title of the task").
 				CharLimit(40).
-				Value(&title),
+				Value(title),
 
 			huh.NewText().
 				Title("Description of the task").
 				CharLimit(200).
-				Value($description),
+				Value(desc),
 
 			huh.NewConfirm().
 				Title("Wanna create this task?").
 				Affirmative("Yes!").
 				Negative("No.").
-				Value(&confirm)
+				Value(&confirm),
 		),
 	).WithTheme(huh.ThemeBase())
 }
 
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// FORM MODE
+	if m.State == StateForm {
+		form, cmd := m.form.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			m.form = f
+
+			if m.form.State == huh.StateCompleted {
+				newTask := model.Task{
+					ID:          len(m.Choices) + 1,
+					Description: m.formTitle,
+					CreatedAt:   time.Now(),
+					Status:      model.Todo,
+				}
+
+				m.Choices = append(m.Choices, newTask)
+
+				m.State = StateList
+				m.formTitle = ""
+				m.formDesc = ""
+			}
+		}
+		return m, cmd
+	}
+
+	// LIST MODE
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -86,6 +114,11 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.Selected[m.Cursor] = struct{}{}
 			}
+
+		case "n":
+			m.State = StateForm
+			m.form = NewTaskForm(&m.formTitle, &m.formDesc)
+			return m, m.form.Init()
 		}
 	}
 
@@ -93,6 +126,10 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m MainModel) View() string {
+	if m.State == StateForm {
+		return m.form.View()
+	}
+
 	s := "What tasks do you plan to solve today?\n\n"
 
 	for i, choice := range m.Choices {
@@ -109,7 +146,8 @@ func (m MainModel) View() string {
 		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice.Description)
 	}
 
-	s += "\nPress q to quit.\n"
+	s += "\n---------------------------"
+	s += "\n[ N ] New Task  |  [ Q ] Quit\n"
 
 	return s
 }

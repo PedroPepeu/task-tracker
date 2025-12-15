@@ -8,9 +8,9 @@ import (
 type TaskStatus int
 
 const (
-	todo TaskStatus = iota
-	inprogress
-	done
+	Todo TaskStatus = iota
+	Inprogress
+	Done
 )
 
 const fileName = "data.json"

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	// "github.com/charmbracelet/huh"
 )
 
 type task_status int
@@ -16,12 +18,14 @@ const (
 	done
 )
 
+const fileName = "data.json"
+
 type task struct {
-	id          int
-	description string
-	status      task_status
-	createdAt   time.Time
-	updatedAt   time.Time
+	id          int         `json:"id"`
+	description string      `json:"description"`
+	status      task_status `json:"status"`
+	createdAt   time.Time   `json:"created"`
+	updatedAt   time.Time   `json:"updated"`
 }
 
 type model struct {
@@ -30,9 +34,60 @@ type model struct {
 	selected map[int]struct{}
 }
 
+func saveTask(filename string, data []task) {
+	file, err := json.MarshalIndent(data, "", " ")
+	if err != nil {
+		fmt.Println("Error encoding JSON:", err)
+		return
+	}
+
+	err = os.WriteFile(filename, file, 0644)
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+	}
+}
+
+func loadTask(filename string) []task {
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Println("file not found or error reading:", err)
+		return []task{}
+	}
+
+	var tasks []task
+
+	err = json.Unmarshal(file, &tasks)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return nil
+	}
+
+	return tasks
+}
+
+form := huh.NewForm(
+	huh.NewGroup(
+		huh.NewText().
+			Title("Title of the task").
+			CharLimit(40).
+			Value(&title),
+
+		huh.NewText().
+			Title("Description of the task").
+			CharLimit(200).
+			Value($description),
+
+		huh.NewConfirm().
+			Title("Wanna create this task?").
+			Affirmative("Yes!").
+			Negative("No.").
+			Value(&confirm)
+	),
+)
+
 func initialModel() model {
 	return model{
-		choices: []task{},
+		choices: []task{}, // examples
 
 		selected: make(map[int]struct{}),
 	}
@@ -73,7 +128,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	s := "What should we buy at the market?\n\n"
+	s := "What tasks do you plan to solve today?\n\n"
 
 	for i, choice := range m.choices {
 		cursor := " "

@@ -74,6 +74,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.form.State == huh.StateCompleted {
 				newTask := model.Task{
 					ID:          len(m.Choices) + 1,
+					Title:       m.formTitle,
 					Description: m.formTitle,
 					CreatedAt:   time.Now(),
 					Status:      model.Todo,
@@ -143,7 +144,7 @@ func (m MainModel) View() string {
 			checked = "x"
 		}
 
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice.Description)
+		s += fmt.Sprintf("%s [%s] %s - %s\n", cursor, checked, choice.Title, choice.Description)
 	}
 
 	s += "\n---------------------------"

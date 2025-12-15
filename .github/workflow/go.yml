@@ -1,4 +1,4 @@
-name: Go setup
+name: Go setup & Auto-Merge
 
 on:
   push:
@@ -13,7 +13,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -27,7 +29,7 @@ jobs:
         run: go build -v ./...
 
       - name: Test with the Go CLI
-        run: go test
+        run: go test -v ./...
 
       - name: Merge releases into main
         if: success()
@@ -39,6 +41,6 @@ jobs:
 
           git checkout main
 
-          git merge releases
+          git merge origin/releases --no-edit
 
           git push origin main

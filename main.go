@@ -17,6 +17,7 @@ func main() {
 
 	initialState := ui.InitialModel()
 	initialState.Choices = tasks
+	initialState.FilteredChoices = tasks
 
 	p := tea.NewProgram(initialState)
 	if _, err := p.Run(); err != nil {

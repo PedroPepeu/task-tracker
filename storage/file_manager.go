@@ -29,12 +29,16 @@ func LoadTask(filename string) []model.Task {
 		return []model.Task{}
 	}
 
+	if len(file) == 0 {
+		return []model.Task{}
+	}
+
 	var tasks []model.Task
 
 	err = json.Unmarshal(file, &tasks)
 	if err != nil {
 		fmt.Println("Error parsing JSON:", err)
-		return nil
+		return []model.Task{}
 	}
 
 	return tasks

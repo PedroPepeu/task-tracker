@@ -9,12 +9,19 @@ import (
 	"github.com/charmbracelet/huh"
 
 	"task-tracker/model"
+	"task-tracker/storage"
 )
 
 const (
 	StateList = iota
 	StateForm
 )
+
+type FormData struct {
+	Title   string
+	Desc    string
+	Confirm bool
+}
 
 type MainModel struct {
 	State    int
@@ -24,8 +31,7 @@ type MainModel struct {
 
 	form *huh.Form
 
-	formTitle string
-	formDesc  string
+	formData *FormData
 }
 
 func InitialModel() MainModel {
@@ -33,6 +39,8 @@ func InitialModel() MainModel {
 		State:    StateList,
 		Choices:  []model.Task{}, // examples
 		Selected: make(map[int]struct{}),
+
+		formData: &FormData{},
 	}
 }
 
@@ -40,26 +48,24 @@ func (m MainModel) Init() tea.Cmd {
 	return nil
 }
 
-func NewTaskForm(title *string, desc *string) *huh.Form {
-	var confirm bool
-
+func NewTaskForm(data *FormData) *huh.Form {
 	return huh.NewForm(
 		huh.NewGroup(
-			huh.NewText().
+			huh.NewInput().
 				Title("Title of the task").
 				CharLimit(40).
-				Value(title),
+				Value(&data.Title),
 
 			huh.NewText().
 				Title("Description of the task").
 				CharLimit(200).
-				Value(desc),
+				Value(&data.Desc),
 
 			huh.NewConfirm().
 				Title("Wanna create this task?").
 				Affirmative("Yes!").
 				Negative("No.").
-				Value(&confirm),
+				Value(&data.Confirm),
 		),
 	).WithTheme(huh.ThemeBase())
 }
@@ -72,19 +78,25 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.form = f
 
 			if m.form.State == huh.StateCompleted {
-				newTask := model.Task{
-					ID:          len(m.Choices) + 1,
-					Title:       m.formTitle,
-					Description: m.formTitle,
-					CreatedAt:   time.Now(),
-					Status:      model.Todo,
+				if m.formData.Confirm && m.formData.Title != "" {
+					newTask := model.Task{
+						ID:          len(m.Choices) + 1,
+						Title:       m.formData.Title,
+						Description: m.formData.Desc,
+						CreatedAt:   time.Now(),
+						Status:      model.Todo,
+					}
+
+					m.Choices = append(m.Choices, newTask)
+					storage.SaveTask("data.json", m.Choices)
+				} else {
+					fmt.Println("DEBUG ERROR: Not saving because Title is empty or Confirm is No")
 				}
 
-				m.Choices = append(m.Choices, newTask)
-
 				m.State = StateList
-				m.formTitle = ""
-				m.formDesc = ""
+				m.formData.Title = ""
+				m.formData.Desc = ""
+				m.formData.Confirm = false
 			}
 		}
 		return m, cmd
@@ -118,7 +130,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "n":
 			m.State = StateForm
-			m.form = NewTaskForm(&m.formTitle, &m.formDesc)
+			m.form = NewTaskForm(m.formData)
 			return m, m.form.Init()
 		}
 	}
@@ -131,7 +143,8 @@ func (m MainModel) View() string {
 		return m.form.View()
 	}
 
-	s := "What tasks do you plan to solve today?\n\n"
+	s := fmt.Sprintf("Debug: I have %d tasks loaded.\n", len(m.Choices))
+	s += "What tasks do you plan to solve today?\n\n"
 
 	for i, choice := range m.Choices {
 		cursor := " "
@@ -148,7 +161,7 @@ func (m MainModel) View() string {
 	}
 
 	s += "\n---------------------------"
-	s += "\n[ N ] New Task  |  [ Q ] Quit\n"
+	s += "\n[ N ] New Task  |  [ E ] Edit Task  |  [ Q ] Quit\n"
 
 	return s
 }
